@@ -13,66 +13,92 @@ env:
   DOCKER_REPO: 'ravendb/ravendb'
 
 jobs:
-  # linux:
-  #   strategy:
-  #     matrix:
-  #       arch: [ x64, arm32v7, arm64v8 ]
-  #     fail-fast: false
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Get ravendb majorminor version
-  #       run: |
-  #         v=$(echo ${{ inputs.version }} | cut -d. -f1,2)
-  #         echo "RAVEN_MAJOR_MINOR=$v" >> $GITHUB_ENV
-  #     - uses: actions/checkout@v3
-  #       with:
-  #         repository: 'ravendb/ravendb'
-  #         ref: "v${{ env.RAVEN_MAJOR_MINOR }}"
+  linux:
+    strategy:
+      matrix:
+        arch: [ x64, arm32v7, arm64v8 ]
+      fail-fast: false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get ravendb majorminor version & set repo
+        run: |
+          v=$(echo ${{ inputs.version }} | cut -d. -f1,2)
+          echo "RAVEN_MAJOR_MINOR=$v" >> $GITHUB_ENV
+          [[ ${{ env.IS_NIGHTLY }} == true ]] && DOCKER_REPO="$DOCKER_REPO-nightly"
+          echo "DOCKER_REPO=$DOCKER_REPO" >> $GITHUB_ENV
 
-  #     - name: Download package
-  #       run: |
-  #         case "${{ matrix.arch }}" in
-  #           "arm32v7")
-  #             downloadURL="https://daily-builds.s3.amazonaws.com/RavenDB-${{ inputs.version }}-raspberry-pi.tar.bz2"
-  #             ;;
-  #           "arm64v8")
-  #             downloadURL="https://daily-builds.s3.amazonaws.com/RavenDB-${{ inputs.version }}-linux-arm64.tar.bz2"
-  #             ;;
+      # - name: Login to docker
+      #   run: |
+      #     docker login -u ravendb -p "${{ secrets.DOCKER_HUB_PASSWORD }}"
+      #     if [[ $? -ne 0 ]]; then
+      #       echo "Could not authenticate with Docker Hub"
+      #       exit 1
+      #     fi
+
+      - uses: actions/checkout@v3
+        with:
+          repository: 'ravendb/ravendb'
+          ref: "v${{ env.RAVEN_MAJOR_MINOR }}"
+
+      - name: Download package
+        run: |
+          case "${{ matrix.arch }}" in
+            "arm32v7")
+              downloadURL="https://daily-builds.s3.amazonaws.com/RavenDB-${{ inputs.version }}-raspberry-pi.tar.bz2"
+              ;;
+            "arm64v8")
+              downloadURL="https://daily-builds.s3.amazonaws.com/RavenDB-${{ inputs.version }}-linux-arm64.tar.bz2"
+              ;;
             
-  #           "x64")
-  #             downloadURL="https://daily-builds.s3.amazonaws.com/RavenDB-${{ inputs.version }}-linux-x64.tar.bz2"
-  #             ;;
-  #           *)
-  #             echo "Unsupported architecture"
-  #             ;;
-  #         esac
-  #         mkdir artifacts
-  #         wget -P "artifacts" "$downloadURL"
+            "x64")
+              downloadURL="https://daily-builds.s3.amazonaws.com/RavenDB-${{ inputs.version }}-linux-x64.tar.bz2"
+              ;;
+            *)
+              echo "Unsupported architecture"
+              ;;
+          esac
+          mkdir artifacts
+          wget -P "artifacts" "$downloadURL"
 
-  #     - name: Build image
-  #       run: |
-  #         [[ ${{ env.IS_NIGHTLY }} == true ]] && $DOCKER_REPO="$DOCKER_REPO-nightly"
-  #         docker pull tonistiigi/binfmt:latest
-  #         docker run --privileged --rm tonistiigi/binfmt --uninstall qemu-*
-  #         docker run --privileged --rm tonistiigi/binfmt --install all
+      - name: Build image
+        run: |
+          docker pull tonistiigi/binfmt:latest
+          docker run --privileged --rm tonistiigi/binfmt --uninstall qemu-*
+          docker run --privileged --rm tonistiigi/binfmt --install all
           
-  #         pwsh build-ubuntu.ps1 -Repo $DOCKER_REPO -Arch ${{ matrix.arch }}
-  #       working-directory: docker
+          pwsh build-ubuntu.ps1 -Repo $DOCKER_REPO -Arch ${{ matrix.arch }}
+        working-directory: docker
+      - name: Publish package
+        run: |
+          pwsh publish-ubuntu.ps1 -Repo $DOCKER_REPO -Arch ${{ matrix.arch }} -DryRun
+          docker logout
+        working-directory: docker
 
 
   windows:
     strategy:
       matrix:
-        data: [ { os: "2019", arch: "1809"}, { os: "2022", arch: "ltsc2022"} ]
+        data: [ { os: "2019", winVer: "1809"}, { os: "2022", winVer: "ltsc2022"} ]
       fail-fast: false
     runs-on: windows-${{ matrix.data.os }}
-
+    #if: ${{ matrix.data.os != "2022" || !startsWith(inputs.version, '5.2') }}
     steps:
-      - name: Get ravendb majorminor version
+      - name: Get ravendb majorminor version & set repo
         shell: bash
         run: |
           v=$(echo ${{ inputs.version }} | cut -d. -f1,2)
           echo "RAVEN_MAJOR_MINOR=$v" >> $GITHUB_ENV
+          [[ ${{ env.IS_NIGHTLY }} == true ]] && DOCKER_REPO="$DOCKER_REPO-nightly"
+          echo "DOCKER_REPO=$DOCKER_REPO" >> $GITHUB_ENV
+        
+      # - name: Login to docker
+      #   shell: pwsh
+      #   run: |
+      #     docker login -u ravendb -p "${{ secrets.DOCKER_HUB_PASSWORD }}"
+      #     if ($LASTEXITCODE -ne 0) {
+      #       throw "Could not authenticate with Docker Hub"
+      #     }
+
       - uses: actions/checkout@v3
         with:
           repository: 'ravendb/ravendb'
@@ -89,12 +115,12 @@ jobs:
       - name: Build image
         shell: pwsh
         run: |
-          if ( "${{ env.IS_NIGHTLY }}" -eq "true" ) {
-            $DOCKER_REPO="${{ env.DOCKER_REPO }}-nightly"
-          }
-          else {
-            $DOCKER_REPO="${{ env.DOCKER_REPO }}"
-          }
-          
-          & .\build-nanoserver.ps1 -Repo $DOCKER_REPO -WinVer ${{ matrix.data.arch }}
+          & .\build-nanoserver.ps1 -Repo ${{ env.DOCKER_REPO }} -WinVer ${{ matrix.data.winVer }}
+        working-directory: docker
+
+      - name: Publish package
+        shell: pwsh
+        run: |
+          & .\publish-nanoserver.ps1 -Repo ${{ env.DOCKER_REPO }} -WinVer ${{ matrix.data.winVer }} -DryRun
+          docker logout
         working-directory: docker
