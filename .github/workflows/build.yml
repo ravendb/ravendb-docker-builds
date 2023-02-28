@@ -74,14 +74,28 @@ jobs:
           docker logout
         working-directory: docker
 
+  windowsMatrixCreator:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.create.outputs.matrix }}
+    steps:
+      - name: Create Matrix
+        id: create
+        run: |
+          v=$(echo ${{ inputs.version }} | cut -d. -f1,2)
+          if [[ "$v" < "5.4" ]]; then
+            echo "matrix=[ { \"os\": \"2019\", \"winVer\": \"1809\"} ]" >> "$GITHUB_OUTPUT"
+          else
+            echo "matrix=[ { \"os\": \"2019\", \"winVer\": \"1809\"}, { \"os\": \"2022\", \"winVer\": \"ltsc2022\"} ]" >> "$GITHUB_OUTPUT"
+          fi
 
   windows:
+    needs: windowsMatrixCreator
     strategy:
       matrix:
-        data: [ { os: "2019", winVer: "1809"}, { os: "2022", winVer: "ltsc2022"} ]
+        data: ${{ fromJson(needs.windowsMatrixCreator.outputs.matrix) }}
       fail-fast: false
     runs-on: windows-${{ matrix.data.os }}
-    #if: ${{ matrix.data.os != "2022" || !startsWith(inputs.version, '5.2') }}
     steps:
       - name: Get ravendb majorminor version & set repo
         shell: bash
