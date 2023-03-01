@@ -36,10 +36,6 @@ jobs:
       - name: Login to docker
         run: |
           docker login -u ${{ env.DOCKER_USER }} -p ${{ secrets.DOCKER_HUB_PASSWORD }}
-          if [[ $? -ne 0 ]]; then
-            echo "Could not authenticate with Docker Hub"
-            exit 1
-          fi
 
       - uses: actions/checkout@v3
         with:
@@ -61,6 +57,7 @@ jobs:
               ;;
             *)
               echo "Unsupported architecture"
+              exit 1
               ;;
           esac
           mkdir artifacts
@@ -115,9 +112,6 @@ jobs:
         shell: pwsh
         run: |
           docker login -u ${{ env.DOCKER_USER }} -p ${{ secrets.DOCKER_HUB_PASSWORD }}
-          if ($LASTEXITCODE -ne 0) {
-            throw "Could not authenticate with Docker Hub"
-          }
 
       - uses: actions/checkout@v3
         with:
@@ -129,8 +123,7 @@ jobs:
         run: |
           $downloadURL="https://daily-builds.s3.amazonaws.com/RavenDB-${{ inputs.version }}-windows-x64.zip"
           mkdir artifacts
-          cd artifacts
-          Invoke-WebRequest -Uri "$downloadURL" -OutFile "RavenDB-${{ inputs.version }}-windows-x64.zip"
+          Invoke-WebRequest -Uri "$downloadURL" -OutFile "artifacts\RavenDB-${{ inputs.version }}-windows-x64.zip"
 
       - name: Build image
         shell: pwsh
