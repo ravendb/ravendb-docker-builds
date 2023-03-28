@@ -34,6 +34,12 @@ jobs:
           [[ ${{ env.IS_NIGHTLY }} == true ]] && DOCKER_REPO="$DOCKER_REPO-nightly"
           echo "DOCKER_REPO=$DOCKER_REPO" >> $GITHUB_ENV
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
       - name: Login to docker
         run: |
           docker login -u ${{ env.DOCKER_USER }} -p ${{ secrets.DOCKER_HUB_PASSWORD }}
@@ -66,10 +72,6 @@ jobs:
 
       - name: Build image
         run: |
-          docker pull tonistiigi/binfmt:latest
-          docker run --privileged --rm tonistiigi/binfmt --uninstall qemu-*
-          docker run --privileged --rm tonistiigi/binfmt --install all
-          
           pwsh build-ubuntu.ps1 -Repo $DOCKER_REPO -Arch ${{ matrix.arch }}
         working-directory: docker
       - name: Publish package
