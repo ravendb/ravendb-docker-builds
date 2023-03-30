@@ -70,10 +70,41 @@ jobs:
           mkdir artifacts
           wget -P "artifacts" "$downloadURL"
 
+      - name: Build deb package
+        run: |
+          case "${{ matrix.arch }}" in
+            "arm32v7")
+              arch="armhf"
+              ;;
+            "arm64v8")
+              arch="arm64"
+              ;;
+            "x64")
+              arch="amd64"
+              ;;
+            *)
+              echo "Unsupported architecture"
+              exit 1
+              ;;
+          esac
+          source ./set-ubuntu-$(lsb_release -cs).sh
+          source ./set-raven-platform-${arch}.sh
+          OUTPUT_DIR=$(readlink -e "../../../../docker/ravendb-ubuntu")
+          export OUTPUT_DIR
+          ./build-deb.sh
+          me=$(whoami)
+          sudo chown ${me}:${me} $OUTPUT_DIR/$(lsb_release -rs)/*.deb
+          sudo chmod a+rw $OUTPUT_DIR/$(lsb_release -rs)/*.deb
+          mv -v $OUTPUT_DIR/$(lsb_release -rs)/*.deb $OUTPUT_DIR/
+        working-directory: scripts/linux/pkg/deb
+        env:
+          RAVENDB_VERSION: ${{ inputs.version }}
+
       - name: Build image
         run: |
           pwsh build-ubuntu.ps1 -Repo $DOCKER_REPO -Arch ${{ matrix.arch }}
         working-directory: docker
+
       - name: Publish package
         run: |
           pwsh publish-ubuntu.ps1 -Repo $DOCKER_REPO -Arch ${{ matrix.arch }}
