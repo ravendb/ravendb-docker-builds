@@ -8,6 +8,10 @@ on:
         description: 'RavenDB Version'
         required: true
         type: string
+      triggering_build_number:
+        description: 'Teamcity triggering build number'
+        required: true
+        type: string
       docker_user:
         description: 'DockerHub username'
         required: false
@@ -15,6 +19,7 @@ on:
         default: ravendb
 
 env:
+  IS_STABLE: ${{ ! contains(inputs.version, '-') }}
   IS_NIGHTLY: ${{ contains(inputs.version, 'nightly') }}
   DOCKER_USER: ${{ inputs.docker_user }}
   DOCKER_REPO: '${{ inputs.docker_user }}/ravendb'
@@ -34,6 +39,8 @@ jobs:
           echo "RAVEN_MAJOR_MINOR=$v" >> $GITHUB_ENV
           [[ ${{ env.IS_NIGHTLY }} == true ]] && DOCKER_REPO="$DOCKER_REPO-nightly"
           echo "DOCKER_REPO=$DOCKER_REPO" >> $GITHUB_ENV
+          buildType=$(echo ${{ inputs.version }} | cut -d- -f2)
+          echo "TRIGGERING_BUILD_TYPE=$buildType" >> $GITHUB_ENV
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
@@ -64,8 +71,8 @@ jobs:
               exit 1
               ;;
           esac
-          mkdir artifacts
-          wget -P "artifacts" "$downloadURL"
+          wget -P "temp" "$downloadURL"
+        working-directory: scripts/linux/pkg/deb
 
       - name: Build deb package
         run: |
@@ -87,14 +94,8 @@ jobs:
           esac
           source ./set-ubuntu-${{ matrix.ubuntuName }}.sh
           source ./set-raven-platform-${arch}.sh
-          OUTPUT_DIR=$(readlink -e "../../../../docker/ravendb-ubuntu")
-          export OUTPUT_DIR
-          echo "DEB_OUTPUT_DIR=$OUTPUT_DIR" >> $GITHUB_ENV
           ./build-deb.sh
-          me=$(whoami)
-          sudo chown ${me}:${me} $OUTPUT_DIR/${DISTRO_VERSION}/*.deb
-          sudo chmod a+rw $OUTPUT_DIR/${DISTRO_VERSION}/*.deb
-          mv -v $OUTPUT_DIR/${DISTRO_VERSION}/*.deb $OUTPUT_DIR/
+          echo "UBUNTU_VERSION=$DISTRO_VERSION" >> $GITHUB_ENV
         working-directory: scripts/linux/pkg/deb
         env:
           RAVENDB_VERSION: ${{ inputs.version }}
@@ -103,11 +104,38 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: package-${{ matrix.ubuntuName }}-${{ matrix.arch }}
-          path: ${{ env.DEB_OUTPUT_DIR }}/ravendb*.deb
+          path: scripts/linux/pkg/deb/dist/${{ env.UBUNTU_VERSION }}/ravendb*.deb
 
       - name: Upload deb package to s3
         run: |
-          echo "uploaded"
+          set -e
+          set -x
+          export DRY_RUN=1
+
+          PACKAGES_DIST_DIR=scripts/linux/pkg/deb/dist
+
+          ls -R $PACKAGES_DIST_DIR
+
+          if [ "${{ env.IS_NIGHTLY }}" == "true" ]; then
+
+            NIGHTLY_VERSION_DATE_PART=$(date "+%Y%M%d-%H%m" -u)
+            export BUILD_VERSION="$NIGHTLY_VERSION_DATE_PART-Nightly"
+          elif [ "${{ env.IS_STABLE }}" == "true" ]; then
+            export BUILD_VERSION="${{ inputs.triggering_build_number }}"
+          else
+            export BUILD_VERSION="${{ inputs.triggering_build_number }}-${{ env.TRIGGERING_BUILD_TYPE }}"
+          fi
+
+          export COMMENT="RavenDB_${RAVENDB_VERSION}_DEB"
+          export S3UPLOADER="./s3uploader.sh"
+
+          # "$S3UPLOADER" --category "RavenDB for Ubuntu ${{ env.UBUNTU_VERSION }} ${{ matrix.arch }} DEB"   --filename "${PACKAGES_DIST_DIR}/${{ env.UBUNTU_VERSION }}/ravendb_${RAVENDB_VERSION}-0_ubuntu.${{ env.UBUNTU_VERSION }}_${{ matrix.arch }}.deb"
+        env:
+          RAVENDB_VERSION: ${{ inputs.version }}
+          BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          SECRET_PASS: ${{ secrets.SECRET_PASS }}
 
   linux:
     strategy:
