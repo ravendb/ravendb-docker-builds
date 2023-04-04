@@ -72,6 +72,7 @@ jobs:
 
       - name: Build deb package
         run: |
+          chmod a+x *.sh
           case "${{ matrix.arch }}" in
             "arm32v7")
               arch="armhf"
