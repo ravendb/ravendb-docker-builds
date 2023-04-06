@@ -97,17 +97,13 @@ API_HR_COM__REGISTER_DL_URL="${API_HR_COM__URL}${API_HR_COM__DOWNLOADS_PATH}"
 
 FILENAME=$(basename $FILEPATH)
 wrapExec aws s3 cp $FILEPATH s3://${BUCKET_NAME}/
-wrapExec aws s3api put-object-acl --region us-east-1 --bucket "${BUCKET_NAME}" --key "${FILENAME}" --acl public-read 
+wrapExec aws s3api put-object-acl --region "${AWS_DEFAULT_REGION}" --bucket "${BUCKET_NAME}" --key "${FILENAME}" --acl public-read 
 
 DOWNLOAD_URL="https://daily-builds.s3.amazonaws.com/${FILENAME}"
 echo "Download URL is: $DOWNLOAD_URL"
 
-wrapExec curl -vvv -X PUT \
-   --data-urlencode "downloadUrl=$DOWNLOAD_URL" \
-   --data-urlencode "comment=$COMMENT" \
-   --data-urlencode "secretPass=$SECRET_PASS" \
-  "$API_HR_COM__REGISTER_DL_URL"
-
-  
-
-
+# wrapExec curl -vvv -X PUT \
+#    --data-urlencode "downloadUrl=$DOWNLOAD_URL" \
+#    --data-urlencode "comment=$COMMENT" \
+#    --data-urlencode "secretPass=$SECRET_PASS" \
+#   "$API_HR_COM__REGISTER_DL_URL"
