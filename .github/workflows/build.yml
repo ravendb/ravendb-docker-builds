@@ -164,9 +164,9 @@ jobs:
 
       - name: Move artifacts to correct folder
         run: |
-          chmod a+rw ravendb*.deb
-          mv -v ravendb*.deb docker/ravendb-ubuntu/
-        working-directory: downloads/package-focal-${{ matrix.arch }}
+          chmod -v a+rw ravendb*.deb
+          mv -v ravendb*.deb ../docker/ravendb-ubuntu/
+        working-directory: downloads
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
@@ -180,6 +180,24 @@ jobs:
 
       - name: Build image
         run: |
+          case "${{ matrix.arch }}" in
+            "arm32v7")
+              downloadURL="https://daily-builds.s3.amazonaws.com/RavenDB-${{ inputs.version }}-raspberry-pi.tar.bz2"
+              ;;
+            "arm64v8")
+              downloadURL="https://daily-builds.s3.amazonaws.com/RavenDB-${{ inputs.version }}-linux-arm64.tar.bz2"
+              ;;
+
+            "x64")
+              downloadURL="https://daily-builds.s3.amazonaws.com/RavenDB-${{ inputs.version }}-linux-x64.tar.bz2"
+              ;;
+            *)
+              echo "Unsupported architecture"
+              exit 1
+              ;;
+          esac
+          wget -P "../artifacts" "$downloadURL"
+          
           pwsh build-ubuntu.ps1 -Repo $DOCKER_REPO -Arch ${{ matrix.arch }}
         working-directory: docker
 
