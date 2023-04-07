@@ -2,18 +2,6 @@
 
 set -e
 
-# original usage
-# S3Uploader.exe [category] [buildVersion] [filename] [comment]
-
-# settings file
-#
-# UrlToPostTo = ConfigurationManager.AppSettings["UrlToPostTo"],
-# SecretPass = ConfigurationManager.AppSettings["SecretPass"],
-# BucketName = ConfigurationManager.AppSettings["BucketName"],
-# AwsAccessKey = ConfigurationManager.AppSettings["AwsAccessKey"],
-# AwsSecretKey = ConfigurationManager.AppSettings["AwsSecretKey"],
-#
-
 function checkRequiredVars {
     local varname=$1
     for varname in "$@"; do
@@ -102,8 +90,8 @@ wrapExec aws s3api put-object-acl --region "${AWS_DEFAULT_REGION}" --bucket "${B
 DOWNLOAD_URL="https://daily-builds.s3.amazonaws.com/${FILENAME}"
 echo "Download URL is: $DOWNLOAD_URL"
 
-# wrapExec curl -vvv -X PUT \
-#    --data-urlencode "downloadUrl=$DOWNLOAD_URL" \
-#    --data-urlencode "comment=$COMMENT" \
-#    --data-urlencode "secretPass=$SECRET_PASS" \
-#   "$API_HR_COM__REGISTER_DL_URL"
+wrapExec curl -vvv -X PUT \
+   --data-urlencode "downloadUrl=$DOWNLOAD_URL" \
+   --data-urlencode "comment=$COMMENT" \
+   --data-urlencode "secretPass=$SECRET_PASS" \
+  "$API_HR_COM__REGISTER_DL_URL"
