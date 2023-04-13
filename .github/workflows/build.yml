@@ -8,10 +8,6 @@ on:
         description: 'RavenDB Version'
         required: true
         type: string
-      build_number:
-        description: 'Build number'
-        required: true
-        type: string
       docker_user:
         description: 'DockerHub username'
         required: false
@@ -91,6 +87,30 @@ jobs:
           wget -P "temp" "$downloadURL"
         working-directory: ravendb/scripts/linux/pkg/deb
 
+      - name: Extract build number
+        run: |
+          case "${{ matrix.arch }}" in
+            "arm32v7")
+              tarName="RavenDB-${{ inputs.version }}-raspberry-pi.tar.bz2"
+              ;;
+            "arm64v8")
+              tarName="RavenDB-${{ inputs.version }}-linux-arm64.tar.bz2"
+              ;;
+
+            "x64")
+              tarName="RavenDB-${{ inputs.version }}-linux-x64.tar.bz2"
+              ;;
+            *)
+              echo "Unsupported architecture"
+              exit 1
+              ;;
+          esac
+          tar -xvf $tarName RavenDB/Server/Raven.Server.dll
+          sudo apt install -y libimage-exiftool-perl
+          number=$(exiftool Raven.Server.dll | grep 'File Version Number' | cut -d. -f 4)
+          echo "BUILD_NUMBER=$number" >> $GITHUB_ENV
+        working-directory: ravendb/scripts/linux/pkg/deb/temp
+
       - name: Build deb package
         run: |
           chmod a+x *.sh
@@ -135,9 +155,9 @@ jobs:
             NIGHTLY_VERSION_DATE_PART=$(date "+%Y%M%d-%H%m" -u)
             export BUILD_VERSION="$NIGHTLY_VERSION_DATE_PART-Nightly"
           elif [ "${{ env.IS_STABLE }}" == "true" ]; then
-            export BUILD_VERSION="${{ inputs.build_number }}"
+            export BUILD_VERSION="${{ env.BUILD_NUMBER }}"
           else
-            export BUILD_VERSION="${{ inputs.build_number }}-${{ env.TRIGGERING_BUILD_TYPE }}"
+            export BUILD_VERSION="${{ env.BUILD_NUMBER }}-${{ env.TRIGGERING_BUILD_TYPE }}"
           fi
 
           export COMMENT="RavenDB_${RAVENDB_VERSION}_DEB"
