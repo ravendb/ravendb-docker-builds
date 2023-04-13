@@ -8,42 +8,69 @@ on:
         description: 'RavenDB Version'
         required: true
         type: string
+      build_number:
+        description: 'Build number'
+        required: true
+        type: string
       docker_user:
         description: 'DockerHub username'
         required: false
         type: string
         default: ravendb
+      github_repository:
+        description: 'Github repository'
+        required: false
+        type: string
+        default: ravendb/ravendb
+      dry_run:
+        description: 'Dry run'
+        required: false
+        type: string
+        default: ''
 
 env:
+  IS_STABLE: ${{ ! contains(inputs.version, '-') }}
   IS_NIGHTLY: ${{ contains(inputs.version, 'nightly') }}
   DOCKER_USER: ${{ inputs.docker_user }}
   DOCKER_REPO: '${{ inputs.docker_user }}/ravendb'
 
 jobs:
-  linux:
+  debPackage:
+    name: Build DEB package
     strategy:
       matrix:
         arch: [ x64, arm32v7, arm64v8 ]
+        ubuntuName: [bionic, focal, jammy]
       fail-fast: false
     runs-on: ubuntu-latest
     steps:
-      - name: Get ravendb majorminor version & set repo
+      - name: Get ravendb majorminor version, build type & set repo
         run: |
           v=$(echo ${{ inputs.version }} | cut -d. -f1,2)
           echo "RAVEN_MAJOR_MINOR=$v" >> $GITHUB_ENV
           [[ ${{ env.IS_NIGHTLY }} == true ]] && DOCKER_REPO="$DOCKER_REPO-nightly"
           echo "DOCKER_REPO=$DOCKER_REPO" >> $GITHUB_ENV
+          buildType=$(echo ${{ inputs.version }} | cut -d- -f2)
+          echo "TRIGGERING_BUILD_TYPE=$buildType" >> $GITHUB_ENV
+          echo "Docker repository: $DOCKER_REPO; TRIGGERING_BUILD_TYPE: $buildType"
 
-      - name: Login to docker
-        run: |
-          docker login -u ${{ env.DOCKER_USER }} -p ${{ secrets.DOCKER_HUB_PASSWORD }}
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
 
       - uses: actions/checkout@v3
         with:
-          repository: 'ravendb/ravendb'
-          ref: "v${{ env.RAVEN_MAJOR_MINOR }}"
+          path: current
 
-      - name: Download package
+      - uses: actions/checkout@v3
+        with:
+          repository: '${{ inputs.github_repository }}'
+          ref: "v${{ env.RAVEN_MAJOR_MINOR }}"
+          path: ravendb
+
+      - name: Download tar package
         run: |
           case "${{ matrix.arch }}" in
             "arm32v7")
@@ -52,7 +79,7 @@ jobs:
             "arm64v8")
               downloadURL="https://daily-builds.s3.amazonaws.com/RavenDB-${{ inputs.version }}-linux-arm64.tar.bz2"
               ;;
-            
+
             "x64")
               downloadURL="https://daily-builds.s3.amazonaws.com/RavenDB-${{ inputs.version }}-linux-x64.tar.bz2"
               ;;
@@ -61,17 +88,139 @@ jobs:
               exit 1
               ;;
           esac
-          mkdir artifacts
-          wget -P "artifacts" "$downloadURL"
+          wget -P "temp" "$downloadURL"
+        working-directory: ravendb/scripts/linux/pkg/deb
+
+      - name: Build deb package
+        run: |
+          chmod a+x *.sh
+          case "${{ matrix.arch }}" in
+            "arm32v7")
+              arch="armhf"
+              ;;
+            "arm64v8")
+              arch="arm64"
+              ;;
+            "x64")
+              arch="amd64"
+              ;;
+            *)
+              echo "Unsupported architecture"
+              exit 1
+              ;;
+          esac
+          source ./set-ubuntu-${{ matrix.ubuntuName }}.sh
+          source ./set-raven-platform-${arch}.sh
+          ./build-deb.sh
+          echo "DEB_ARCH=$arch" >> $GITHUB_ENV
+          echo "UBUNTU_VERSION=$DISTRO_VERSION" >> $GITHUB_ENV
+        working-directory: ravendb/scripts/linux/pkg/deb
+        env:
+          RAVENDB_VERSION: ${{ inputs.version }}
+
+      - name: Upload deb package to artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: package-${{ matrix.ubuntuName }}-${{ matrix.arch }}
+          path: ravendb/scripts/linux/pkg/deb/dist/${{ env.UBUNTU_VERSION }}/ravendb*.deb
+
+      - name: Upload deb package to s3
+        run: |
+          set -e
+          set -x
+
+          PACKAGES_DIST_DIR=ravendb/scripts/linux/pkg/deb/dist
+
+          if [ "${{ env.IS_NIGHTLY }}" == "true" ]; then
+            NIGHTLY_VERSION_DATE_PART=$(date "+%Y%M%d-%H%m" -u)
+            export BUILD_VERSION="$NIGHTLY_VERSION_DATE_PART-Nightly"
+          elif [ "${{ env.IS_STABLE }}" == "true" ]; then
+            export BUILD_VERSION="${{ inputs.build_number }}"
+          else
+            export BUILD_VERSION="${{ inputs.build_number }}-${{ env.TRIGGERING_BUILD_TYPE }}"
+          fi
+
+          export COMMENT="RavenDB_${RAVENDB_VERSION}_DEB"
+          export S3UPLOADER="./current/s3uploader.sh"
+
+          "$S3UPLOADER" \
+            --category "RavenDB for Ubuntu ${{ env.UBUNTU_VERSION }} ${{ matrix.arch }} DEB" \
+            --filename "${PACKAGES_DIST_DIR}/${{ env.UBUNTU_VERSION }}/ravendb_${RAVENDB_VERSION}-0_ubuntu.${{ env.UBUNTU_VERSION }}_${{ env.DEB_ARCH }}.deb"
+        env:
+          RAVENDB_VERSION: ${{ inputs.version }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+          SECRET_PASS: ${{ secrets.SECRET_PASS }}
+
+  linux:
+    name: Build Linux Docker image
+    strategy:
+      matrix:
+        arch: [ x64, arm32v7, arm64v8 ]
+      fail-fast: false
+    runs-on: ubuntu-latest
+    needs: debPackage
+    if: always()
+    steps:
+      - name: Get ravendb majorminor version & set repo
+        run: |
+          v=$(echo ${{ inputs.version }} | cut -d. -f1,2)
+          echo "RAVEN_MAJOR_MINOR=$v" >> $GITHUB_ENV
+          [[ ${{ env.IS_NIGHTLY }} == true ]] && DOCKER_REPO="$DOCKER_REPO-nightly"
+          echo "DOCKER_REPO=$DOCKER_REPO" >> $GITHUB_ENV
+
+      - uses: actions/checkout@v3
+        with:
+          repository: '${{ inputs.github_repository }}'
+          ref: "v${{ env.RAVEN_MAJOR_MINOR }}"
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: package-focal-${{ matrix.arch }}
+          path: downloads
+
+      - name: Move deb to correct folder
+        run: |
+          chmod -v a+rw ravendb*.deb
+          mv -v ravendb*.deb ../docker/ravendb-ubuntu/
+        working-directory: downloads
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Login to docker
+        run: |
+          docker login -u ${{ env.DOCKER_USER }} -p ${{ secrets.DOCKER_HUB_PASSWORD }}
 
       - name: Build image
         run: |
-          docker pull tonistiigi/binfmt:latest
-          docker run --privileged --rm tonistiigi/binfmt --uninstall qemu-*
-          docker run --privileged --rm tonistiigi/binfmt --install all
+          case "${{ matrix.arch }}" in
+            "arm32v7")
+              downloadURL="https://daily-builds.s3.amazonaws.com/RavenDB-${{ inputs.version }}-raspberry-pi.tar.bz2"
+              ;;
+            "arm64v8")
+              downloadURL="https://daily-builds.s3.amazonaws.com/RavenDB-${{ inputs.version }}-linux-arm64.tar.bz2"
+              ;;
+
+            "x64")
+              downloadURL="https://daily-builds.s3.amazonaws.com/RavenDB-${{ inputs.version }}-linux-x64.tar.bz2"
+              ;;
+            *)
+              echo "Unsupported architecture"
+              exit 1
+              ;;
+          esac
+          wget -P "../artifacts" "$downloadURL"
           
           pwsh build-ubuntu.ps1 -Repo $DOCKER_REPO -Arch ${{ matrix.arch }}
         working-directory: docker
+
       - name: Publish package
         run: |
           pwsh publish-ubuntu.ps1 -Repo $DOCKER_REPO -Arch ${{ matrix.arch }}
@@ -79,6 +228,7 @@ jobs:
         working-directory: docker
 
   windowsDockerImageBuilder:
+    name: Matrix Creator for Windows
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.create.outputs.matrix }}
@@ -95,6 +245,7 @@ jobs:
 
   windows:
     needs: windowsDockerImageBuilder
+    name: Build Windows Docker images
     strategy:
       matrix:
         data: ${{ fromJson(needs.windowsDockerImageBuilder.outputs.matrix) }}
@@ -108,7 +259,7 @@ jobs:
           echo "RAVEN_MAJOR_MINOR=$v" >> $GITHUB_ENV
           [[ ${{ env.IS_NIGHTLY }} == true ]] && DOCKER_REPO="$DOCKER_REPO-nightly"
           echo "DOCKER_REPO=$DOCKER_REPO" >> $GITHUB_ENV
-        
+
       - name: Login to docker
         shell: pwsh
         run: |
@@ -116,7 +267,7 @@ jobs:
 
       - uses: actions/checkout@v3
         with:
-          repository: 'ravendb/ravendb'
+          repository: '${{ inputs.github_repository }}'
           ref: "v${{ env.RAVEN_MAJOR_MINOR }}"
 
       - name: Download package
