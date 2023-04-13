@@ -29,6 +29,7 @@ env:
   IS_NIGHTLY: ${{ contains(inputs.version, 'nightly') }}
   DOCKER_USER: ${{ inputs.docker_user }}
   DOCKER_REPO: '${{ inputs.docker_user }}/ravendb'
+  DRY_RUN: ${{ inputs.dry_run }}
 
 jobs:
   debPackage:
@@ -168,7 +169,6 @@ jobs:
             --filename "${PACKAGES_DIST_DIR}/${{ env.UBUNTU_VERSION }}/ravendb_${RAVENDB_VERSION}-0_ubuntu.${{ env.UBUNTU_VERSION }}_${{ env.DEB_ARCH }}.deb"
         env:
           RAVENDB_VERSION: ${{ inputs.version }}
-          DRY_RUN: ${{ inputs.dry_run }}
           BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
