@@ -152,7 +152,7 @@ jobs:
           PACKAGES_DIST_DIR=ravendb/scripts/linux/pkg/deb/dist
 
           if [ "${{ env.IS_NIGHTLY }}" == "true" ]; then
-            NIGHTLY_VERSION_DATE_PART=$(date "+%Y%M%d-%H%m" -u)
+            NIGHTLY_VERSION_DATE_PART=$(echo ${{ inputs.version }} | cut -d- -f3,4)
             export BUILD_VERSION="$NIGHTLY_VERSION_DATE_PART-Nightly"
           elif [ "${{ env.IS_STABLE }}" == "true" ]; then
             export BUILD_VERSION="${{ env.BUILD_NUMBER }}"
