@@ -200,7 +200,7 @@ jobs:
 
       - uses: actions/download-artifact@v3
         with:
-          name: package-focal-${{ matrix.arch }}
+          name: package-jammy-${{ matrix.arch }}
           path: downloads
 
       - name: Move deb to correct folder
