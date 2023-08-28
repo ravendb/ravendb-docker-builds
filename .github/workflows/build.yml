@@ -151,6 +151,22 @@ jobs:
           set -e
           set -x
 
+          case "${{ matrix.arch }}" in
+            "arm32v7")
+              arch="arm32"
+              ;;
+            "arm64v8")
+              arch="arm64"
+              ;;
+            "x64")
+              arch="x64"
+              ;;
+            *)
+              echo "Unsupported architecture"
+              exit 1
+              ;;
+          esac
+
           PACKAGES_DIST_DIR=ravendb/scripts/linux/pkg/deb/dist
 
           if [ "${{ env.IS_NIGHTLY }}" == "true" ]; then
@@ -166,7 +182,7 @@ jobs:
           export S3UPLOADER="./current/s3uploader.sh"
 
           "$S3UPLOADER" \
-            --category "RavenDB for Ubuntu ${{ env.UBUNTU_VERSION }} ${{ matrix.arch }} DEB" \
+            --category "RavenDB for Ubuntu ${{ env.UBUNTU_VERSION }} ${arch} DEB" \
             --filename "${PACKAGES_DIST_DIR}/${{ env.UBUNTU_VERSION }}/ravendb_${RAVENDB_VERSION}-0_ubuntu.${{ env.UBUNTU_VERSION }}_${{ env.DEB_ARCH }}.deb"
         env:
           RAVENDB_VERSION: ${{ inputs.version }}
