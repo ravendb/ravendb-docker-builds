@@ -90,27 +90,40 @@ jobs:
 
       - name: Extract build number
         run: |
-          case "${{ matrix.arch }}" in
-            "arm32v7")
-              tarName="RavenDB-${{ inputs.version }}-raspberry-pi.tar.bz2"
-              ;;
-            "arm64v8")
-              tarName="RavenDB-${{ inputs.version }}-linux-arm64.tar.bz2"
-              ;;
+          version=$(echo ${{ inputs.version }} | cut -d. -f1,2 | tr -d .)
+          diff=$((version - 61))
+          if [[ $diff -ge 0 ]]; then
+            filename="RavenDB-${{ inputs.version }}-linux-x64.tar.bz2"
+            wget -P x64 "https://daily-builds.s3.amazonaws.com/${filename}"
+            filePath="RavenDB/Server/Raven.Server"
+            tar -xvf x64/$filename $filePath
+            number=$(./$filePath -- info | grep "AssemblyVersion" | cut -d" " -f2)
+            echo "BUILD_NUMBER=$number" >> $GITHUB_ENV
+            rm -r x64
+          else
+            case "${{ matrix.arch }}" in
+              "arm32v7")
+                tarName="RavenDB-${{ inputs.version }}-raspberry-pi.tar.bz2"
+                ;;
+              "arm64v8")
+                tarName="RavenDB-${{ inputs.version }}-linux-arm64.tar.bz2"
+                ;;
 
-            "x64")
-              tarName="RavenDB-${{ inputs.version }}-linux-x64.tar.bz2"
-              ;;
-            *)
-              echo "Unsupported architecture"
-              exit 1
-              ;;
-          esac
-          filePath="RavenDB/Server/Raven.Server.dll"
-          tar -xvf $tarName $filePath
-          sudo apt install -y libimage-exiftool-perl
-          number=$(exiftool $filePath | grep 'File Version Number' | cut -d. -f 4)
-          echo "BUILD_NUMBER=$number" >> $GITHUB_ENV
+              "x64")
+                tarName="RavenDB-${{ inputs.version }}-linux-x64.tar.bz2"
+                ;;
+              *)
+                echo "Unsupported architecture"
+                exit 1
+                ;;
+            esac
+
+            filePath="RavenDB/Server/Raven.Server.dll"
+            tar -xvf $tarName $filePath
+            sudo apt install -y libimage-exiftool-perl
+            number=$(exiftool $filePath | grep 'File Version Number' | cut -d. -f 4)
+            echo "BUILD_NUMBER=$number" >> $GITHUB_ENV
+          fi
         working-directory: ravendb/scripts/linux/pkg/deb/temp
 
       - name: Build deb package
