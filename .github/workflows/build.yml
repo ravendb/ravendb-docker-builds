@@ -126,7 +126,7 @@ jobs:
                 --build-arg "DISTRO_VERSION=$DISTRO_VERSION" \
                 --build-arg "QEMU_ARCH=$QEMU_ARCH" \
                 -t $DEB_BUILD_ENV_IMAGE \
-                -f ../../../../../../current/dockerfile .
+                -f ../../../../../../current/Dockerfile .
               docker run --rm \
                 --platform $DOCKER_BUILDPLATFORM \
                 -v "$(pwd):/output" \
