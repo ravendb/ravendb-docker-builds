@@ -90,39 +90,59 @@ jobs:
 
       - name: Extract build number
         run: |
-          version=$(echo ${{ inputs.version }} | cut -d. -f1,2 | tr -d .)
-          diff=$((version - 61))
-          if [[ $diff -ge 0 ]]; then
-            filename="RavenDB-${{ inputs.version }}-linux-x64.tar.bz2"
-            wget -P x64 "https://daily-builds.s3.amazonaws.com/${filename}"
-            filePath="RavenDB/Server/Raven.Server"
-            tar -xvf x64/$filename $filePath
-            number=$(./$filePath -- info | grep "AssemblyVersion" | cut -d" " -f2)
-            echo "BUILD_NUMBER=$number" >> $GITHUB_ENV
-            rm -r x64
-          else
-            case "${{ matrix.arch }}" in
-              "arm32v7")
-                tarName="RavenDB-${{ inputs.version }}-raspberry-pi.tar.bz2"
-                ;;
-              "arm64v8")
-                tarName="RavenDB-${{ inputs.version }}-linux-arm64.tar.bz2"
-                ;;
+          case "${{ matrix.arch }}" in
+            "arm32v7")
+              tarName="RavenDB-${{ inputs.version }}-raspberry-pi.tar.bz2"
+              qemu="qemu-arm"
+              arch="armhf"
+              ;;
+            "arm64v8")
+              tarName="RavenDB-${{ inputs.version }}-linux-arm64.tar.bz2"
+              qemu="qemu-aarch64"
+              arch="arm64"
+              ;;
 
-              "x64")
-                tarName="RavenDB-${{ inputs.version }}-linux-x64.tar.bz2"
-                ;;
-              *)
-                echo "Unsupported architecture"
-                exit 1
-                ;;
-            esac
+            "x64")
+              tarName="RavenDB-${{ inputs.version }}-linux-x64.tar.bz2"
+              ;;
+            *)
+              echo "Unsupported architecture"
+              exit 1
+              ;;
+          esac
+          version=$(echo ${{ inputs.version }} | cut -d. -f1,2)
+          if [[ "$version" > "6.0" ]]; then
+            filePath="RavenDB/Server/Raven.Server"
+            tar -xvf $tarName $filePath
+            if [[ -z $qemu ]]; then
+              number=$(./$filePath --info | grep "Build" | cut -d" " -f2)
+            else
+              source ../set-ubuntu-${{ matrix.ubuntuName }}.sh
+              source ../set-raven-platform-${arch}.sh
+              export DEB_BUILD_ENV_IMAGE="ravendb-server-info-extractor_$DEB_ARCHITECTURE"
+              docker pull --platform $DOCKER_BUILDPLATFORM ubuntu:$DISTRO_VERSION
+              docker build \
+                --platform $DOCKER_BUILDPLATFORM \
+                --build-arg "DISTRO_VERSION=$DISTRO_VERSION" \
+                --build-arg "QEMU_ARCH=$QEMU_ARCH" \
+                -t $DEB_BUILD_ENV_IMAGE \
+                -f ../../../../../../current/dockerfile .
+              docker run --rm \
+                --platform $DOCKER_BUILDPLATFORM \
+                -v "$(pwd):/output" \
+                $DEB_BUILD_ENV_IMAGE 
+
+              number=$(grep "Build" info.txt | cut -d" " -f2)
+            fi
+            echo "BUILD_NUMBER=$number" >> $GITHUB_ENV
+          else
 
             filePath="RavenDB/Server/Raven.Server.dll"
             tar -xvf $tarName $filePath
             sudo apt install -y libimage-exiftool-perl
             number=$(exiftool $filePath | grep 'File Version Number' | cut -d. -f 4)
             echo "BUILD_NUMBER=$number" >> $GITHUB_ENV
+            echo "BUILD_NUMBER: $BUILD_NUMBER"
           fi
         working-directory: ravendb/scripts/linux/pkg/deb/temp
 
