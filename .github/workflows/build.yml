@@ -365,3 +365,33 @@ jobs:
           & .\publish-nanoserver.ps1 -Repo ${{ env.DOCKER_REPO }} -WinVer ${{ matrix.data.winVer }}
           docker logout
         working-directory: docker
+
+  multiarch:
+    needs: [linux, windows]
+    name: Create docker multiarch manifest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get ravendb majorminor version & set repo
+        shell: bash
+        run: |
+          v=$(echo ${{ inputs.version }} | cut -d. -f1,2)
+          echo "RAVEN_MAJOR_MINOR=$v" >> $GITHUB_ENV
+          [[ ${{ env.IS_NIGHTLY }} == true ]] && DOCKER_REPO="$DOCKER_REPO-nightly"
+          echo "DOCKER_REPO=$DOCKER_REPO" >> $GITHUB_ENV
+
+      - name: Login to docker
+        shell: pwsh
+        run: |
+          docker login -u ${{ env.DOCKER_USER }} -p ${{ secrets.DOCKER_HUB_PASSWORD }}
+
+      - uses: actions/checkout@v3
+        with:
+          repository: '${{ inputs.github_repository }}'
+          ref: "v${{ env.RAVEN_MAJOR_MINOR }}"
+
+      - name: Publish multiarch
+        shell: pwsh
+        run: |
+          & .\publish-multiarch.ps1 -Repo ${{ env.DOCKER_REPO }}
+          docker logout
+        working-directory: docker
