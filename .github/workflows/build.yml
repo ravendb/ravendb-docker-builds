@@ -258,7 +258,7 @@ jobs:
           echo "DOCKER_SYSTEM=$dockerSystem" >> $GITHUB_ENV
         working-directory: docker/ravendb-ubuntu
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4.1.7
         with:
           name: package-${{ env.DOCKER_SYSTEM }}-${{ matrix.arch }}
           path: downloads
