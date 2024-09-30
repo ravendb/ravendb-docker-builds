@@ -28,6 +28,11 @@ on:
         required: false
         type: string
         default: ''
+      exit_on_cves:
+        description: 'Stop pipeline when cves are found'
+        required: true
+        type: boolean
+        default: true
 
 env:
   IS_STABLE: ${{ ! contains(inputs.version, '-') }}
@@ -90,7 +95,7 @@ jobs:
               exit 1
               ;;
           esac
-          wget -P "temp" "$downloadURL"
+          wget -q -P "temp" "$downloadURL"
         working-directory: ravendb/scripts/linux/pkg/deb
 
       - name: Extract build number
@@ -270,10 +275,10 @@ jobs:
         working-directory: downloads
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Build
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
 
       - name: Login to docker
         run: |
@@ -297,10 +302,17 @@ jobs:
               exit 1
               ;;
           esac
-          wget -P "../artifacts" "$downloadURL"
+          wget -q -P "../artifacts" "$downloadURL"
           
           pwsh build-ubuntu.ps1 -Repo $DOCKER_REPO -Arch ${{ matrix.arch }}
         working-directory: docker
+
+      - name: Docker Scout
+        uses: docker/scout-action@v1
+        with:
+          command: cves
+          exit-code: ${{ inputs.exit_on_cves }}
+          only-severities: critical
 
       - name: Publish package
         run: |
@@ -365,6 +377,13 @@ jobs:
         run: |
           & .\build-nanoserver.ps1 -Repo ${{ env.DOCKER_REPO }} -WinVer ${{ matrix.data.winVer }}
         working-directory: docker
+
+      - name: Docker Scout
+        uses: docker/scout-action@v1
+        with:
+          command: cves
+          exit-code: ${{ inputs.exit_on_cves }}
+          only-severities: critical
 
       - name: Publish package
         shell: pwsh
