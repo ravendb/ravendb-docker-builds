@@ -67,11 +67,11 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           path: current
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           repository: '${{ inputs.github_repository }}'
           ref: "v${{ env.RAVEN_MAJOR_MINOR }}"
@@ -184,7 +184,7 @@ jobs:
           RAVENDB_VERSION: ${{ inputs.version }}
 
       - name: Upload deb package to artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: package-${{ matrix.ubuntuName }}-${{ matrix.arch }}
           path: ravendb/scripts/linux/pkg/deb/dist/${{ env.UBUNTU_VERSION }}/ravendb*.deb
@@ -252,7 +252,7 @@ jobs:
           [[ ${{ env.IS_NIGHTLY }} == true ]] && DOCKER_REPO="$DOCKER_REPO-nightly"
           echo "DOCKER_REPO=$DOCKER_REPO" >> $GITHUB_ENV
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           repository: '${{ inputs.github_repository }}'
           ref: "v${{ env.RAVEN_MAJOR_MINOR }}"
@@ -263,7 +263,7 @@ jobs:
           echo "DOCKER_SYSTEM=$dockerSystem" >> $GITHUB_ENV
         working-directory: docker/ravendb-ubuntu
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: package-${{ env.DOCKER_SYSTEM }}-${{ matrix.arch }}
           path: downloads
@@ -360,7 +360,7 @@ jobs:
         run: |
           docker login -u ${{ env.DOCKER_USER }} -p ${{ secrets.DOCKER_HUB_PASSWORD }}
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           repository: '${{ inputs.github_repository }}'
           ref: "v${{ env.RAVEN_MAJOR_MINOR }}"
@@ -411,7 +411,7 @@ jobs:
         run: |
           docker login -u ${{ env.DOCKER_USER }} -p ${{ secrets.DOCKER_HUB_PASSWORD }}
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           repository: '${{ inputs.github_repository }}'
           ref: "v${{ env.RAVEN_MAJOR_MINOR }}"
