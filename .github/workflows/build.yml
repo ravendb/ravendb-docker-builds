@@ -18,6 +18,11 @@ on:
         required: false
         type: string
         default: ravendb/ravendb
+      docker_repository:
+        description: 'Docker repository'
+        required: false
+        type: string
+        default: ravendb/ravendb
       deb_only:
         description: 'Build deb packages only'
         required: false
@@ -33,7 +38,7 @@ env:
   IS_STABLE: ${{ ! contains(inputs.version, '-') }}
   IS_NIGHTLY: ${{ contains(inputs.version, 'nightly') }}
   DOCKER_USER: ${{ inputs.docker_user }}
-  DOCKER_REPO: '${{ inputs.docker_user }}/ravendb'
+  DOCKER_REPO: ${{ inputs.docker_repository }}
   DRY_RUN: ${{ inputs.dry_run }}
 
 jobs:
