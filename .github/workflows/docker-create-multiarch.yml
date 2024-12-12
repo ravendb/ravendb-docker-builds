@@ -1,0 +1,56 @@
+name: Create docker multiarch manifest
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: 'RavenDB Version'
+        required: true
+        type: string
+      docker_user:
+        description: 'DockerHub username'
+        required: true
+        type: string
+        default: ravendb
+      docker_repo:
+        description: 'DockerHub username'
+        required: true
+        type: string
+        default: ravendb/ravendb
+      github_repository:
+        description: 'Github repository'
+        required: true
+        type: string
+        default: ravendb/ravendb
+      raven_major_minor:
+        type: string
+        required: true
+      dry_run:
+        description: 'Dry run'
+        required: false
+        type: string
+        default: ''
+
+env:
+  DRY_RUN: ${{ inputs.dry_run }}
+
+jobs:
+  multiarch:
+    name: Create docker multiarch manifest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login to docker
+        shell: pwsh
+        run: |
+          docker login -u ${{ inputs.docker_user }} -p ${{ secrets.DOCKER_HUB_PASSWORD }}
+
+      - uses: actions/checkout@v4
+        with:
+          repository: '${{ inputs.github_repository }}'
+          ref: "v${{ inputs.raven_major_minor }}"
+
+      - name: Publish multiarch
+        shell: pwsh
+        run: |
+          & .\publish-multiarch.ps1 -Repo ${{ inputs.docker_repo }}
+          docker logout
+        working-directory: docker

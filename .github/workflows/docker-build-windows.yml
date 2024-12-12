@@ -1,0 +1,90 @@
+name: Build Windows Docker images
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: 'RavenDB Version'
+        required: true
+        type: string
+      docker_user:
+        description: 'DockerHub username'
+        required: true
+        type: string
+        default: ravendb
+      docker_repo:
+        description: 'DockerHub username'
+        required: true
+        type: string
+        default: ravendb/ravendb
+      github_repository:
+        description: 'Github repository'
+        required: true
+        type: string
+        default: ravendb/ravendb
+      raven_major_minor:
+        type: string
+        required: true
+      dry_run:
+          description: 'Dry run'
+          required: false
+          type: string
+          default: ''
+
+env:
+  DRY_RUN: ${{ inputs.dry_run }}
+
+jobs:
+  windowsDockerImageBuilder:
+    name: Matrix Creator for Windows
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.create.outputs.matrix }}
+    steps:
+      - name: Create Matrix
+        id: create
+        run: |
+          v=$(echo ${{ inputs.version }} | cut -d. -f1,2)
+          if [[ "$v" < "5.4" ]]; then
+            echo "matrix=[ { \"os\": \"2019\", \"winVer\": \"1809\"} ]" >> "$GITHUB_OUTPUT"
+          else
+            echo "matrix=[ { \"os\": \"2019\", \"winVer\": \"1809\"}, { \"os\": \"2022\", \"winVer\": \"ltsc2022\"} ]" >> "$GITHUB_OUTPUT"
+          fi
+
+  windows:
+    needs: windowsDockerImageBuilder
+    name: Build Windows Docker images
+    strategy:
+      matrix:
+        data: ${{ fromJson(needs.windowsDockerImageBuilder.outputs.matrix) }}
+      fail-fast: false
+    runs-on: windows-${{ matrix.data.os }}
+    steps:
+      - name: Login to docker
+        shell: pwsh
+        run: |
+          docker login -u ${{ inputs.docker_user }} -p ${{ secrets.DOCKER_HUB_PASSWORD }}
+
+      - uses: actions/checkout@v4
+        with:
+          repository: '${{ inputs.github_repository }}'
+          ref: "v${{ inputs.raven_major_minor }}"
+
+      - name: Download package
+        shell: pwsh
+        run: |
+          $downloadURL="https://daily-builds.s3.amazonaws.com/RavenDB-${{ inputs.version }}-windows-x64.zip"
+          mkdir artifacts
+          Invoke-WebRequest -Uri "$downloadURL" -OutFile "artifacts\RavenDB-${{ inputs.version }}-windows-x64.zip"
+
+      - name: Build image
+        shell: pwsh
+        run: |
+          & .\build-nanoserver.ps1 -Repo ${{ inputs.docker_repo }} -WinVer ${{ matrix.data.winVer }}
+        working-directory: docker
+
+      - name: Publish package
+        shell: pwsh
+        run: |
+          & .\publish-nanoserver.ps1 -Repo ${{ inputs.docker_repo }} -WinVer ${{ matrix.data.winVer }}
+          docker logout
+        working-directory: docker
