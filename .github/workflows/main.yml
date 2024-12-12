@@ -1,0 +1,121 @@
+name: Build Deb & Docker images
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'RavenDB Version'
+        required: true
+        type: string
+      docker_user:
+        description: 'DockerHub username'
+        required: false
+        type: string
+        default: ravendb
+      github_repository:
+        description: 'Github repository'
+        required: false
+        type: string
+        default: ravendb/ravendb
+      deb_only:
+        description: 'Build deb packages only'
+        required: false
+        type: boolean
+        default: false
+      dry_run:
+        description: 'Dry run'
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  commonVars:
+    runs-on: ubuntu-latest
+    outputs:
+      raven_major_minor: ${{ steps.commonVars.outputs.raven_major_minor }}
+      docker_repo: ${{ steps.commonVars.outputs.docker_repo }}
+      is_stable: ${{ steps.commonVars.outputs.is_stable }}
+      is_nightly: ${{ steps.commonVars.outputs.is_nightly }}
+      dotnet_major_version: ${{ steps.commonVars.outputs.dotnet_major_version }}
+    steps:
+      - name: Download tar package
+        run: |
+          downloadURL="https://daily-builds.s3.amazonaws.com/RavenDB-${{ inputs.version }}-linux-x64.tar.bz2"
+          wget -q "$downloadURL"
+
+      - name: Get ravendb majorminor version & set repo
+        id: commonVars
+        shell: bash
+        run: |
+          v=$(echo ${{ inputs.version }} | cut -d. -f1,2)
+          echo "raven_major_minor=$v" >> $GITHUB_OUTPUT
+          echo "is_stable=${{ ! contains(inputs.version, '-') }}" >> $GITHUB_OUTPUT
+          isNightly="${{ contains(inputs.version, 'nightly') }}"
+          echo "is_nightly=$isNightly" >> $GITHUB_OUTPUT
+          dockerRepo="${{ inputs.docker_user }}/ravendb"
+          [[ $isNightly == true ]] && dockerRepo="${dockerRepo}-nightly"
+          echo "docker_repo=$dockerRepo" >> $GITHUB_OUTPUT
+          tar -xf RavenDB-${{ inputs.version }}-linux-x64.tar.bz2 RavenDB/runtime.txt
+          dotnetMajor=$(grep "Runtime" RavenDB/runtime.txt | cut -d: -f2 | tr -d [:space:] | cut -d '.' -f1)
+          echo "dotnet_major_version=$dotnetMajor" >> $GITHUB_OUTPUT
+
+  debPackage:
+    needs: commonVars
+    uses: ./.github/workflows/build-deb.yml
+    with:
+      version: ${{ inputs.version }}
+      dotnet_major_version: ${{ fromJson(needs.commonVars.outputs.dotnet_major_version) }}
+      github_repository: ${{ inputs.github_repository }}
+      dry_run: ${{ inputs.dry_run }}
+      is_stable: ${{ needs.commonVars.outputs.is_stable == 'true' }}
+      is_nightly: ${{ needs.commonVars.outputs.is_nightly == 'true' }}
+      raven_major_minor: ${{ needs.commonVars.outputs.raven_major_minor }}
+    secrets: inherit
+
+  docker-linux:
+    if: always() && inputs.deb_only == false
+    needs: [commonVars, debPackage]
+    uses: ./.github/workflows/docker-build-linux.yml
+    with:
+      version: ${{ inputs.version }}
+      docker_user: ${{ inputs.docker_user }}
+      github_repository: ${{ inputs.github_repository }}
+      dry_run: ${{ inputs.dry_run }}
+      docker_repo: ${{ needs.commonVars.outputs.docker_repo }}
+      raven_major_minor: ${{ needs.commonVars.outputs.raven_major_minor }}
+    secrets: inherit
+
+  docker-windows:
+    if: always() && inputs.deb_only == false
+    needs: commonVars
+    uses: ./.github/workflows/docker-build-windows.yml
+    with:
+      version: ${{ inputs.version }}
+      docker_user: ${{ inputs.docker_user }}
+      github_repository: ${{ inputs.github_repository }}
+      dry_run: ${{ inputs.dry_run }}
+      docker_repo: ${{ needs.commonVars.outputs.docker_repo }}
+      raven_major_minor: ${{ needs.commonVars.outputs.raven_major_minor }}
+    secrets: inherit
+
+  docker-multiarch:
+    needs: [commonVars, docker-linux, docker-windows]
+    if: always() && inputs.deb_only == false
+    uses: ./.github/workflows/docker-create-multiarch.yml
+    with:
+      version: ${{ inputs.version }}
+      docker_user: ${{ inputs.docker_user }}
+      github_repository: ${{ inputs.github_repository }}
+      dry_run: ${{ inputs.dry_run }}
+      docker_repo: ${{ needs.commonVars.outputs.docker_repo }}
+      raven_major_minor: ${{ needs.commonVars.outputs.raven_major_minor }}
+    secrets: inherit
+
+  testDeb:
+    needs: [commonVars, debPackage]
+    if: always()
+    uses: ./.github/workflows/test-deb.yml
+    with:
+      version: ${{ inputs.version }}
+      github_repository: ${{ inputs.github_repository }}
+      raven_major_minor: ${{ needs.commonVars.outputs.raven_major_minor }}
+      dotnet_major_version: ${{ fromJson(needs.commonVars.outputs.dotnet_major_version) }}

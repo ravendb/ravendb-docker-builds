@@ -1,0 +1,11 @@
+ARG QEMU_ARCH
+ARG DISTRO_VERSION_NAME
+FROM multiarch/qemu-user-static:x86_64-${QEMU_ARCH} as qemu
+FROM ubuntu:${DISTRO_VERSION_NAME} 
+
+ARG QEMU_ARCH
+COPY --from=qemu /usr/bin/qemu-${QEMU_ARCH}-static /usr/bin
+
+RUN apt update -y && apt install -y adduser curl
+
+CMD ./scripts/start-test.sh
