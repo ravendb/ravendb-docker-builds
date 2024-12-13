@@ -47,12 +47,28 @@ env:
   DRY_RUN: ${{ inputs.dry_run }}
 
 jobs:
+  extractMajorVersion:
+    runs-on: ubuntu-latest
+    outputs:
+      major: ${{ steps.extract_version.outputs.major }}
+    steps:
+      - id: extract_version
+        run: |
+          major=$(echo "${{ inputs.version }}" | cut -d '.' -f1)
+          echo "major=$major" >> $GITHUB_OUTPUT
+
   debPackage:
     name: Build DEB package
+    needs: extractMajorVersion
     strategy:
       matrix:
         arch: [ x64, arm32v7, arm64v8 ]
         ubuntuName: [focal, jammy, noble ]
+        isDotnet9:
+          - ${{ fromJSON(needs.extractMajorVersion.outputs.major) > 6 }}
+        exclude:
+          - isDotnet9: true
+            ubuntuName: focal
       fail-fast: false
     runs-on: ubuntu-latest
     steps:
