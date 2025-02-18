@@ -75,6 +75,8 @@ jobs:
         exclude:
           - isDotnet9: true
             ubuntuName: focal
+          - arch: arm64v8
+            ubuntuName: jammy
       fail-fast: false
     runs-on: ubuntu-latest
     steps:
