@@ -148,7 +148,7 @@ jobs:
           filePath="RavenDB/Server/Raven.Server.dll"
           tar -xvf $tarName $filePath
           sudo apt install -y libimage-exiftool-perl
-          number=$(exiftool $filePath | grep 'File Version Number' | cut -d. -f 4)
+          number=$(exiftool $filePath | egrep 'File Version[ ]+:' | cut -d. -f 4)
           echo "BUILD_NUMBER=$number" >> $GITHUB_ENV
         working-directory: ravendb/scripts/linux/pkg/deb/temp
 
