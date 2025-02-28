@@ -39,8 +39,6 @@ jobs:
     strategy:
       matrix:
         arch: [ x64, arm32v7, arm64v8 ]
-        exclude:
-          - arch: arm64v8
       fail-fast: false
     runs-on: ubuntu-latest
     steps:
