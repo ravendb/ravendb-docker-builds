@@ -48,16 +48,10 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
-      - name: Get docker system
-        run: |
-          dockerSystem=$(grep -o -P "(?<=FROM\smcr\.microsoft\.com\/dotnet\/runtime-deps:\d\.\d-)([a-zA-Z]+)(?=.*)" Dockerfile.${{ matrix.arch }})
-          echo "DOCKER_SYSTEM=$dockerSystem" >> $GITHUB_ENV
-        working-directory: ravendb/docker/ravendb-ubuntu
-
       - name: Download package
         uses: actions/download-artifact@v4
         with:
-          name: package-${{ env.DOCKER_SYSTEM }}-${{ matrix.arch }}
+          name: package-${{ matrix.ubuntuName }}-${{ matrix.arch }}
           path: ./deb/
 
       - name: Run x64 package tests
