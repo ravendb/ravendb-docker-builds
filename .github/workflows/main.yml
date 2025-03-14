@@ -12,6 +12,11 @@ on:
         required: false
         type: string
         default: ravendb
+      docker_repository_owner:
+        description: 'DockerHub repository owner'
+        required: false
+        type: string
+        default: ravendb
       github_repository:
         description: 'Github repository'
         required: false
@@ -52,7 +57,7 @@ jobs:
           echo "is_stable=${{ ! contains(inputs.version, '-') }}" >> $GITHUB_OUTPUT
           isNightly="${{ contains(inputs.version, 'nightly') }}"
           echo "is_nightly=$isNightly" >> $GITHUB_OUTPUT
-          dockerRepo="${{ inputs.docker_user }}/ravendb"
+          dockerRepo="${{ inputs.docker_repository_owner }}/ravendb"
           [[ $isNightly == true ]] && dockerRepo="${dockerRepo}-nightly"
           echo "docker_repo=$dockerRepo" >> $GITHUB_OUTPUT
           tar -xf RavenDB-${{ inputs.version }}-linux-x64.tar.bz2 RavenDB/runtime.txt
