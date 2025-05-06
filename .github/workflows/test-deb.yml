@@ -20,12 +20,11 @@ on:
 
 
 jobs:
-  test-package:
+  test-package-x64:
     runs-on: ubuntu-latest
     strategy:
       matrix:
         ubuntuName: [focal, jammy, noble]
-        arch: [x64, arm64v8]
         isDotnet9:
           - ${{ inputs.dotnet_major_version == 9 }}
         exclude:
@@ -41,9 +40,6 @@ jobs:
           repository: '${{ inputs.github_repository }}'
           ref: "v${{ inputs.raven_major_minor }}"
           path: ravendb
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
   
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
@@ -51,46 +47,68 @@ jobs:
       - name: Download package
         uses: actions/download-artifact@v4
         with:
-          name: package-${{ matrix.ubuntuName }}-${{ matrix.arch }}
+          name: package-${{ matrix.ubuntuName }}-x64
           path: ./deb/
 
       - name: Run x64 package tests
-        if: matrix.arch == 'x64'
         run: |
           set -e
           export DOCKER_BUILDPLATFORM="linux/amd64"
-          export DEB_BUILD_ENV_IMAGE="ravendb-deb-test-${{ matrix.arch }}"
-          docker pull --platform $DOCKER_BUILDPLATFORM ubuntu:${{ matrix.ubuntuName }}
+          export DEB_BUILD_ENV_IMAGE="ravendb-deb-test-x64"
           docker build \
+            --pull \
             --platform $DOCKER_BUILDPLATFORM \
             --build-arg "DISTRO_VERSION_NAME=${{ matrix.ubuntuName }}" \
             -t $DEB_BUILD_ENV_IMAGE \
-            -f tests/Dockerfile.x64 .
+            -f tests/Dockerfile.native .
           docker run --rm \
             --platform $DOCKER_BUILDPLATFORM \
             -v "$(pwd)"/tests/scripts:/scripts \
             -v "$(pwd)"/deb:/deb \
             $DEB_BUILD_ENV_IMAGE
 
-      - name: Run multiarch package tests
-        if: matrix.arch != 'x64'
+  test-package-arm64:
+    runs-on: ubuntu-24.04-arm
+    strategy:
+      matrix:
+        ubuntuName: [focal, jammy, noble]
+        isDotnet9:
+          - ${{ inputs.dotnet_major_version == 9 }}
+        exclude:
+          - isDotnet9: true
+            ubuntuName: focal
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: '${{ inputs.github_repository }}'
+          ref: "v${{ inputs.raven_major_minor }}"
+          path: ravendb
+  
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Download package
+        uses: actions/download-artifact@v4
+        with:
+          name: package-${{ matrix.ubuntuName }}-arm64v8
+          path: ./deb/
+
+      - name: Run arm64 package tests
         run: |
           set -e
-          if [[ ${{matrix.arch}} == "arm32v7" ]]; then
-            export DOCKER_BUILDPLATFORM="linux/arm/v7"
-            export QEMU_ARCH="arm"
-          else
-            export DOCKER_BUILDPLATFORM="linux/arm64"
-            export QEMU_ARCH="aarch64"
-          fi
-          export DEB_BUILD_ENV_IMAGE="ravendb-deb-test-${{ matrix.arch }}"
-          docker pull --platform $DOCKER_BUILDPLATFORM ubuntu:${{ matrix.ubuntuName }}
+          export DOCKER_BUILDPLATFORM="linux/arm64"
+          export DEB_BUILD_ENV_IMAGE="ravendb-deb-test-arm64v8"
           docker build \
+            --pull \
             --platform $DOCKER_BUILDPLATFORM \
             --build-arg "DISTRO_VERSION_NAME=${{ matrix.ubuntuName }}" \
             --build-arg "QEMU_ARCH=$QEMU_ARCH" \
             -t $DEB_BUILD_ENV_IMAGE \
-            -f tests/Dockerfile.multiarch .
+            -f tests/Dockerfile.native .
           docker run --rm \
             --platform $DOCKER_BUILDPLATFORM \
             -v "$(pwd)"/tests/scripts:/scripts \
