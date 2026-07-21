@@ -35,7 +35,7 @@ jobs:
     name: Build DEB package
     strategy:
       matrix:
-        ubuntuName: [focal, jammy, noble]
+        ubuntuName: [focal, jammy, noble, resolute]
         arch: [x64]
         isDotnet9OrGreater:
           - ${{ inputs.dotnet_major_version >= 9 }}
@@ -190,7 +190,7 @@ jobs:
     name: Build DEB package
     strategy:
       matrix:
-        ubuntuName: [focal, jammy, noble]
+        ubuntuName: [focal, jammy, noble, resolute]
         arch: [arm32v7, arm64v8]
         isDotnet9OrGreater:
           - ${{ inputs.dotnet_major_version >= 9 }}
