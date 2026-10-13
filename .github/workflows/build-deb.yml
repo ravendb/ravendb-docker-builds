@@ -22,6 +22,10 @@ on:
         type: number
         required: true
         default: 8
+      ubuntu_names:
+        description: 'JSON array of Ubuntu codenames to build for'
+        type: string
+        required: true
       dry_run:
         type: string
         required: false
@@ -35,7 +39,7 @@ jobs:
     name: Build DEB package
     strategy:
       matrix:
-        ubuntuName: [focal, jammy, noble, resolute]
+        ubuntuName: ${{ fromJson(inputs.ubuntu_names) }}
         arch: [x64]
         isDotnet9OrGreater:
           - ${{ inputs.dotnet_major_version >= 9 }}
@@ -76,21 +80,23 @@ jobs:
               exit 1
               ;;
           esac
-          wget -P "temp" "$downloadURL"
+          mkdir -p temp
+          # build.sh looks up the cached tarball under a lowercase name
+          wget -O "temp/ravendb-${downloadURL#*/RavenDB-}" "$downloadURL"
         working-directory: ravendb/scripts/linux/pkg/deb
 
       - name: Extract build number
         run: |
           case "${{ matrix.arch }}" in
             "arm32v7")
-              tarName="RavenDB-${{ inputs.version }}-raspberry-pi.tar.bz2"
+              tarName="ravendb-${{ inputs.version }}-raspberry-pi.tar.bz2"
               ;;
             "arm64v8")
-              tarName="RavenDB-${{ inputs.version }}-linux-arm64.tar.bz2"
+              tarName="ravendb-${{ inputs.version }}-linux-arm64.tar.bz2"
               ;;
 
             "x64")
-              tarName="RavenDB-${{ inputs.version }}-linux-x64.tar.bz2"
+              tarName="ravendb-${{ inputs.version }}-linux-x64.tar.bz2"
               ;;
             *)
               echo "Unsupported architecture"
@@ -99,7 +105,8 @@ jobs:
           esac
           filePath="RavenDB/Server/Raven.Server.dll"
           tar -xvf $tarName $filePath
-          sudo apt install -y libimage-exiftool-perl
+          sudo apt-get update
+          sudo apt-get install -y libimage-exiftool-perl
           number=$(exiftool $filePath | egrep 'File Version[ ]+:' | cut -d. -f 4)
           echo "BUILD_NUMBER=$number" >> $GITHUB_ENV
         working-directory: ravendb/scripts/linux/pkg/deb/temp
@@ -190,14 +197,15 @@ jobs:
     name: Build DEB package
     strategy:
       matrix:
-        ubuntuName: [focal, jammy, noble, resolute]
+        ubuntuName: ${{ fromJson(inputs.ubuntu_names) }}
         arch: [arm32v7, arm64v8]
         isDotnet9OrGreater:
           - ${{ inputs.dotnet_major_version >= 9 }}
         exclude:
           - isDotnet9OrGreater: true
             ubuntuName: focal
-          - arch: [ x64, arm32v7 ]
+          - ubuntuName: resolute
+            arch: arm32v7
       fail-fast: false
     runs-on: ubuntu-24.04-arm
     steps:
@@ -232,21 +240,23 @@ jobs:
               exit 1
               ;;
           esac
-          wget -P "temp" "$downloadURL"
+          mkdir -p temp
+          # build.sh looks up the cached tarball under a lowercase name
+          wget -O "temp/ravendb-${downloadURL#*/RavenDB-}" "$downloadURL"
         working-directory: ravendb/scripts/linux/pkg/deb
 
       - name: Extract build number
         run: |
           case "${{ matrix.arch }}" in
             "arm32v7")
-              tarName="RavenDB-${{ inputs.version }}-raspberry-pi.tar.bz2"
+              tarName="ravendb-${{ inputs.version }}-raspberry-pi.tar.bz2"
               ;;
             "arm64v8")
-              tarName="RavenDB-${{ inputs.version }}-linux-arm64.tar.bz2"
+              tarName="ravendb-${{ inputs.version }}-linux-arm64.tar.bz2"
               ;;
 
             "x64")
-              tarName="RavenDB-${{ inputs.version }}-linux-x64.tar.bz2"
+              tarName="ravendb-${{ inputs.version }}-linux-x64.tar.bz2"
               ;;
             *)
               echo "Unsupported architecture"
@@ -255,7 +265,8 @@ jobs:
           esac
           filePath="RavenDB/Server/Raven.Server.dll"
           tar -xvf $tarName $filePath
-          sudo apt install -y libimage-exiftool-perl
+          sudo apt-get update
+          sudo apt-get install -y libimage-exiftool-perl
           number=$(exiftool $filePath | egrep 'File Version[ ]+:' | cut -d. -f 4)
           echo "BUILD_NUMBER=$number" >> $GITHUB_ENV
         working-directory: ravendb/scripts/linux/pkg/deb/temp

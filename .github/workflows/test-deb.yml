@@ -13,6 +13,10 @@ on:
         type: string
         required: false
         default: hiddenshadow21/ravendb
+      ubuntu_names:
+        description: 'JSON array of Ubuntu codenames to test'
+        type: string
+        required: true
       dotnet_major_version:
           type: number
           required: true
@@ -24,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        ubuntuName: [focal, jammy, noble]
+        ubuntuName: ${{ fromJson(inputs.ubuntu_names) }}
         isDotnet9OrGreater:
           - ${{ inputs.dotnet_major_version >= 9 }}
         exclude:
@@ -71,7 +75,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     strategy:
       matrix:
-        ubuntuName: [focal, jammy, noble]
+        ubuntuName: ${{ fromJson(inputs.ubuntu_names) }}
         isDotnet9OrGreater:
           - ${{ inputs.dotnet_major_version >= 9 }}
         exclude:

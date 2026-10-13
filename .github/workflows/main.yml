@@ -42,6 +42,7 @@ jobs:
       is_stable: ${{ steps.commonVars.outputs.is_stable }}
       is_nightly: ${{ steps.commonVars.outputs.is_nightly }}
       dotnet_major_version: ${{ steps.commonVars.outputs.dotnet_major_version }}
+      ubuntu_names: ${{ steps.ubuntuNames.outputs.ubuntu_names }}
     steps:
       - name: Download tar package
         run: |
@@ -64,6 +65,22 @@ jobs:
           dotnetMajor=$(grep "Runtime" RavenDB/runtime.txt | cut -d: -f2 | tr -d [:space:] | cut -d '.' -f1)
           echo "dotnet_major_version=$dotnetMajor" >> $GITHUB_OUTPUT
 
+      - uses: actions/checkout@v4
+        with:
+          repository: '${{ inputs.github_repository }}'
+          ref: "v${{ steps.commonVars.outputs.raven_major_minor }}"
+          path: ravendb
+          sparse-checkout: scripts/linux/pkg/deb
+
+      - name: Get Ubuntu versions supported by the branch
+        id: ubuntuNames
+        run: |
+          # bionic scripts are still present on some branches, but its packages are no longer built
+          ubuntuNames=$(ls set-ubuntu-*.sh | sed -E 's/^set-ubuntu-(.+)\.sh$/\1/' | grep -vx bionic | jq -Rnc '[inputs]')
+          echo "Ubuntu versions: $ubuntuNames"
+          echo "ubuntu_names=$ubuntuNames" >> $GITHUB_OUTPUT
+        working-directory: ravendb/scripts/linux/pkg/deb
+
   debPackage:
     needs: commonVars
     uses: ./.github/workflows/build-deb.yml
@@ -75,6 +92,7 @@ jobs:
       is_stable: ${{ needs.commonVars.outputs.is_stable == 'true' }}
       is_nightly: ${{ needs.commonVars.outputs.is_nightly == 'true' }}
       raven_major_minor: ${{ needs.commonVars.outputs.raven_major_minor }}
+      ubuntu_names: ${{ needs.commonVars.outputs.ubuntu_names }}
     secrets: inherit
 
   docker-linux:
@@ -127,3 +145,4 @@ jobs:
       github_repository: ${{ inputs.github_repository }}
       raven_major_minor: ${{ needs.commonVars.outputs.raven_major_minor }}
       dotnet_major_version: ${{ fromJson(needs.commonVars.outputs.dotnet_major_version) }}
+      ubuntu_names: ${{ needs.commonVars.outputs.ubuntu_names }}
