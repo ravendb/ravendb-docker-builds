@@ -90,7 +90,7 @@ wrapExec aws s3api put-object-acl --region "${AWS_DEFAULT_REGION}" --bucket "${B
 DOWNLOAD_URL="https://daily-builds.s3.amazonaws.com/${FILENAME}"
 echo "Download URL is: $DOWNLOAD_URL"
 
-wrapExec curl -vvv -X PUT \
+wrapExec curl -vvv --fail-with-body -X PUT \
    --data-urlencode "downloadUrl=$DOWNLOAD_URL" \
    --data-urlencode "comment=$COMMENT" \
    --data-urlencode "secretPass=$SECRET_PASS" \
