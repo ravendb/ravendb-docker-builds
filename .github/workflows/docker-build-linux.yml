@@ -65,8 +65,10 @@ jobs:
 
       - name: Move deb to correct folder
         run: |
-          chmod -v a+rw ravendb*.deb
-          mv -v ravendb*.deb ../docker/ravendb-ubuntu/
+          debName=$(ls ravendb*.deb)
+          chmod -v a+rw "$debName"
+          mv -v "$debName" ../docker/ravendb-ubuntu/
+          echo "DEB_NAME=$debName" >> $GITHUB_ENV
         working-directory: downloads
 
       - name: Set up QEMU
@@ -108,7 +110,7 @@ jobs:
             extraArgs="-UseVersionTagsOnly"
           fi
           
-          pwsh build-ubuntu.ps1 -Repo ${{ inputs.docker_repo }} -Arch ${{ matrix.arch }} $extraArgs
+          pwsh build-ubuntu.ps1 -Repo ${{ inputs.docker_repo }} -Arch ${{ matrix.arch }} -DebPackagePath "$DEB_NAME" $extraArgs
         working-directory: docker
 
       - name: Publish package
