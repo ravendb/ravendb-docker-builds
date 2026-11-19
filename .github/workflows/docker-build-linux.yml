@@ -37,6 +37,9 @@ on:
 
 env:
   DRY_RUN: ${{ inputs.dry_run }}
+  # Docker 29 (containerd image store) keeps buildx's default provenance attestation and pushes
+  # an image index instead of a plain manifest, which `docker manifest create --amend` rejects.
+  BUILDX_NO_DEFAULT_ATTESTATIONS: 1
 
 jobs:
   linux:
